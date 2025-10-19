@@ -1,0 +1,4 @@
+eth-brownie
+pandas
+merkletools==1.0.3
+pysha3==1.0b1

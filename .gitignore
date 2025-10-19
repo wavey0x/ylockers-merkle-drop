@@ -1,0 +1,12 @@
+__pycache__
+.env
+.history
+.hypothesis/
+build/
+reports/
+contracts/
+interfaces/
+tests/
+
+# Event log cache
+data/cache/
