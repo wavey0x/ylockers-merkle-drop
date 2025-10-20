@@ -42,6 +42,7 @@ contract YlockerDrops is Ownable {
         require(msg.sender == _account || msg.sender == delegates[_account], "!authorized");
         bytes32 _root = drops[_dropId].merkleRoot;
         require(_root != bytes32(0), "root not set");
+        require(drops[_dropId].startsAt <= block.timestamp, "!started");
         require(drops[_dropId].expiresAt >= block.timestamp, "expired");
         require(!hasClaimed[_account][_dropId], "already claimed");
         bytes32 node = keccak256(abi.encodePacked(_account, _index, _amount));
@@ -59,17 +60,20 @@ contract YlockerDrops is Ownable {
     /**
         @notice Create a new drop
         @param _token Token to be distributed
+        @param _startTime Start timestamp for claims.
         @param _duration Duration of the drop in seconds
         @param _totalAmount Total amount of tokens to be distributed
         @param _merkleRoot Merkle root for the drop
     */
-    function createDrop(address _token, uint256 _duration, uint256 _totalAmount, bytes32 _merkleRoot) external onlyOwner {
+    function createDrop(address _token, uint256 _startTime, uint256 _duration, uint256 _totalAmount, bytes32 _merkleRoot) external onlyOwner {
+        if (_startTime == 0) _startTime = block.timestamp;
+        require(_startTime >= block.timestamp);
         require(_totalAmount > 0, "totalAmount must be greater than 0");
         require(IERC20(_token).balanceOf(address(this)) >= _totalAmount, "not funded");
         require(_duration > 0, "duration must be greater than 0");
         uint256 _dropId = dropCount++;
-        drops[_dropId] = Drop(_token, uint40(block.timestamp), uint40(block.timestamp + _duration), _totalAmount, 0, _merkleRoot);
-        emit DropCreated(_dropId, _token, uint40(block.timestamp), uint40(block.timestamp + _duration), _totalAmount);
+        drops[_dropId] = Drop(_token, uint40(_startTime), uint40(block.timestamp + _duration), _totalAmount, 0, _merkleRoot);
+        emit DropCreated(_dropId, _token, uint40(_startTime), uint40(block.timestamp + _duration), _totalAmount);
         if (_merkleRoot != bytes32(0)) {
             emit MerkleRootSet(_dropId, _merkleRoot);
         }
