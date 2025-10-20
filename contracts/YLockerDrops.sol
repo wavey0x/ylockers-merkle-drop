@@ -53,16 +53,23 @@ contract YlockerDrops is Ownable {
         hasClaimed[_account][_dropId] = true;
         drops[_dropId].claimedAmount += _amount;
         emit Claimed(_dropId, _account, _recipient, _amount);
-        IERC20(drops[_dropId].token).transfer(_recipient, _amount);
+        IERC20(drops[_dropId].token).safeTransfer(_recipient, _amount);
     }
 
-    function createDrop(address _token, uint256 _expiresAt, uint256 _totalAmount, bytes32 _merkleRoot) external onlyOwner {
+    /**
+        @notice Create a new drop
+        @param _token Token to be distributed
+        @param _duration Duration of the drop in seconds
+        @param _totalAmount Total amount of tokens to be distributed
+        @param _merkleRoot Merkle root for the drop
+    */
+    function createDrop(address _token, uint256 _duration, uint256 _totalAmount, bytes32 _merkleRoot) external onlyOwner {
         require(_totalAmount > 0, "totalAmount must be greater than 0");
         require(IERC20(_token).balanceOf(address(this)) >= _totalAmount, "not funded");
-        require(block.timestamp < _expiresAt, "expiresAt in past");
+        require(_duration > 0, "duration must be greater than 0");
         uint256 _dropId = dropCount++;
-        drops[_dropId] = Drop(_token, uint40(block.timestamp), uint40(_expiresAt), _totalAmount, 0, _merkleRoot);
-        emit DropCreated(_dropId, _token, uint40(block.timestamp), uint40(_expiresAt), _totalAmount);
+        drops[_dropId] = Drop(_token, uint40(block.timestamp), uint40(block.timestamp + _duration), _totalAmount, 0, _merkleRoot);
+        emit DropCreated(_dropId, _token, uint40(block.timestamp), uint40(block.timestamp + _duration), _totalAmount);
         if (_merkleRoot != bytes32(0)) {
             emit MerkleRootSet(_dropId, _merkleRoot);
         }
@@ -83,7 +90,7 @@ contract YlockerDrops is Ownable {
         require(block.timestamp > drop.expiresAt, "not expired");
         require(drop.claimedAmount < drop.totalAmount, "fully claimed");
         uint256 _amount = drop.totalAmount - drop.claimedAmount;
-        IERC20(drop.token).transfer(owner(), _amount);
+        IERC20(drop.token).safeTransfer(owner(), _amount);
         emit ExpiredTokensRecovered(drop.token, _amount);
     }
 
