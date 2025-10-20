@@ -5,7 +5,6 @@ __pycache__
 build/
 reports/
 interfaces/
-tests/
 
 # Event log cache
-data/cache/
+# data/cache/
