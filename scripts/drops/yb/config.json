@@ -8,6 +8,7 @@
   "include_untokenized": false,
   "include_firm": false,
   "include_ajna": false,
-  "min_amount": 2000.0,
-  "last_updated": "2025-10-20T13:41:40.178570"
+  "include_vanilla_ycrv": false,
+  "min_amount": 3000.0,
+  "last_updated": "2025-10-20T14:26:44.842727"
 }

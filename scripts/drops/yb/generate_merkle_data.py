@@ -119,3 +119,28 @@ def main():
     click.echo("\nTop 10 YB recipients:")
     for i, addr in enumerate(addresses_sorted[:10]):
         click.echo(f"  {i+1}. {web3.to_checksum_address(addr)}: {yb_amounts[addr] / 1e18:,.2f} YB")
+
+    # Calculate and display distribution statistics
+    amounts_list = [yb_amounts[addr] / 1e18 for addr in addresses_sorted]
+    total_users = len(amounts_list)
+    min_amount = amounts_list[-1] if amounts_list else 0  # Last in sorted list (lowest)
+    max_amount = amounts_list[0] if amounts_list else 0  # First in sorted list (highest)
+    avg_amount = sum(amounts_list) / total_users if total_users > 0 else 0
+
+    # Calculate median
+    if total_users == 0:
+        median_amount = 0
+    elif total_users % 2 == 1:
+        median_amount = amounts_list[total_users // 2]
+    else:
+        median_amount = (amounts_list[total_users // 2 - 1] + amounts_list[total_users // 2]) / 2
+
+    click.echo("\n" + click.style("━" * 70, fg='cyan'))
+    click.echo(click.style("  DISTRIBUTION STATISTICS", fg='cyan', bold=True))
+    click.echo(click.style("━" * 70, fg='cyan'))
+    click.echo(f"  Total Recipients:  {total_users:,}")
+    click.echo(f"  Maximum Amount:    {max_amount:,.2f} YB")
+    click.echo(f"  Average Amount:    {avg_amount:,.2f} YB")
+    click.echo(f"  Median Amount:     {median_amount:,.2f} YB")
+    click.echo(f"  Minimum Amount:    {min_amount:,.2f} YB")
+    click.echo(click.style("━" * 70, fg='cyan'))
