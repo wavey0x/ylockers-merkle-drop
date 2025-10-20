@@ -1,14 +1,120 @@
 from brownie import Contract, accounts, chain, web3, multicall, ZERO_ADDRESS
 from json import dump
 from collections import defaultdict
+from datetime import datetime
 from utils.constants import YCRV
 from utils.event_cache import scan_events_with_cache
-from config import Config
+import os
+import re
+import json
 
-SNAPSHOT_HEIGHT = 22603160
-MIN_AMOUNT = 500 * 10**18
-include_untokenized = False
-include_lp = True
+
+class DropConfig:
+    """Configuration for this token distribution snapshot"""
+
+    # Drop identification
+    DROP_NAME = "yb"
+
+    # Snapshot parameters (CLI defaults)
+    DEFAULT_BLOCK = 23582414
+    DEFAULT_INCLUDE_LP = False
+    DEFAULT_INCLUDE_UNTOKENIZED = False
+    DEFAULT_INCLUDE_FIRM = False
+    DEFAULT_INCLUDE_AJNA = False
+    DEFAULT_INCLUDE_VANILLA_YCRV = False
+    DEFAULT_MIN_AMOUNT = 500.0  # in tokens (not wei)
+
+    # Output paths
+    SNAPSHOT_DIR = f'data/sources/{DROP_NAME}'
+    MERKLE_OUTPUT = f'data/merkle/{DROP_NAME}.json'
+
+    # Distribution parameters (for merkle generation)
+    TOTAL_TOKENS = 116_459_570000000000000000  # 116,459.57 YB
+
+    @classmethod
+    def get_config_file(cls):
+        """Get path to config.json for this drop"""
+        return os.path.join(os.path.dirname(__file__), 'config.json')
+
+    @classmethod
+    def load_config(cls):
+        """
+        Load configuration from config.json if it exists.
+        Returns dict with all config values, falling back to class defaults.
+        """
+        config_file = cls.get_config_file()
+        config = {
+            'drop_name': cls.DROP_NAME,
+            'snapshot_dir': cls.SNAPSHOT_DIR,
+            'merkle_output': cls.MERKLE_OUTPUT,
+            'total_tokens': str(cls.TOTAL_TOKENS),
+            'block': cls.DEFAULT_BLOCK,
+            'include_lp': cls.DEFAULT_INCLUDE_LP,
+            'include_untokenized': cls.DEFAULT_INCLUDE_UNTOKENIZED,
+            'include_firm': cls.DEFAULT_INCLUDE_FIRM,
+            'include_ajna': cls.DEFAULT_INCLUDE_AJNA,
+            'include_vanilla_ycrv': cls.DEFAULT_INCLUDE_VANILLA_YCRV,
+            'min_amount': cls.DEFAULT_MIN_AMOUNT,
+        }
+
+        if os.path.exists(config_file):
+            try:
+                with open(config_file, 'r') as f:
+                    saved_config = json.load(f)
+                    config.update(saved_config)
+            except Exception as e:
+                print(f"Warning: Could not load config.json: {e}")
+
+        return config
+
+    @classmethod
+    def save_config(cls, config):
+        """
+        Save configuration to config.json
+
+        Args:
+            config: Dict with configuration values
+        """
+        config_file = cls.get_config_file()
+        config['last_updated'] = datetime.now().isoformat()
+
+        os.makedirs(os.path.dirname(config_file), exist_ok=True)
+        with open(config_file, 'w') as f:
+            json.dump(config, f, indent=2)
+
+    @classmethod
+    def get_snapshot_file(cls, block_height):
+        """Get the snapshot file path for a given block height"""
+        config = cls.load_config()
+        snapshot_dir = config.get('snapshot_dir', cls.SNAPSHOT_DIR)
+        drop_name = config.get('drop_name', cls.DROP_NAME)
+        return f'{snapshot_dir}/{drop_name}_snapshot_{block_height}.json'
+
+    @classmethod
+    def get_latest_snapshot(cls):
+        """Find the most recent snapshot file"""
+        config = cls.load_config()
+        snapshot_dir = config.get('snapshot_dir', cls.SNAPSHOT_DIR)
+        drop_name = config.get('drop_name', cls.DROP_NAME)
+
+        if not os.path.exists(snapshot_dir):
+            return None
+
+        pattern = re.compile(rf'{drop_name}_snapshot_(\d+)\.json')
+        snapshots = []
+
+        for filename in os.listdir(snapshot_dir):
+            match = pattern.match(filename)
+            if match:
+                block = int(match.group(1))
+                snapshots.append((block, os.path.join(snapshot_dir, filename)))
+
+        if not snapshots:
+            return None
+
+        # Return path of highest block number
+        return sorted(snapshots, key=lambda x: x[0], reverse=True)[0][1]
+
 
 # Mapping of event types to all possible field name variants across different contracts
 ADDRESS_KEYS_BY_EVENT = {
@@ -17,6 +123,11 @@ ADDRESS_KEYS_BY_EVENT = {
     "Deposited": ["user"],
     "CreateEscrow": ["user", "escrow"],
 }
+
+# Configuration constants
+MULTICALL_CHUNK_SIZE = 500  # Number of users to process per multicall batch
+EOF_BYTECODE_PREFIX = '0xef0100'  # EIP-3540 EOF (EVM Object Format) bytecode marker
+EOF_BYTECODE_PREFIX_NO_PREFIX = 'ef0100'  # EOF marker without 0x prefix
 
 def extract_addresses(logs, event):
     """
@@ -53,6 +164,27 @@ def main():
     ycrv_positions()
 
 def ycrv_positions():
+    # Load runtime configuration
+    config = DropConfig.load_config()
+    SNAPSHOT_HEIGHT = config['block']
+    MIN_AMOUNT = int(config['min_amount'] * 1e18)  # Convert decimal to wei
+    include_lp = config['include_lp']
+    include_untokenized = config['include_untokenized']
+    include_firm = config['include_firm']
+    include_ajna = config['include_ajna']
+    include_vanilla_ycrv = config['include_vanilla_ycrv']
+
+    print(f"\n{'='*60}")
+    print(f"Running snapshot with configuration:")
+    print(f"  Block: {SNAPSHOT_HEIGHT}")
+    print(f"  Min Amount: {config['min_amount']} tokens ({MIN_AMOUNT} wei)")
+    print(f"  Include LP: {include_lp}")
+    print(f"  Include Untokenized: {include_untokenized}")
+    print(f"  Include FIRM: {include_firm}")
+    print(f"  Include AJNA: {include_ajna}")
+    print(f"  Include Vanilla yCRV: {include_vanilla_ycrv}")
+    print(f"{'='*60}\n")
+
     ve = Contract(YCRV['VECRV'])
     ycrv = Contract(YCRV['YCRV'])
     st_ycrv = Contract(YCRV['ST_YCRV'])
@@ -96,7 +228,6 @@ def ycrv_positions():
         users.update(lp_users)
 
     # Process users in chunks with multicall for better performance
-    MULTICALL_CHUNK_SIZE = 500
     user_list = list(users)
     values = {}
 
@@ -112,10 +243,15 @@ def ycrv_positions():
         with multicall(block_identifier=SNAPSHOT_HEIGHT):
             for user in chunk:
                 chunk_data[user]['st_balance'] = st_ycrv.balanceOf(user)
-                chunk_data[user]['borrower_info'] = helper.borrowerInfo(YCRV['AJNA_POOL'], user)
+                if include_ajna:
+                    chunk_data[user]['borrower_info'] = helper.borrowerInfo(YCRV['AJNA_POOL'], user)
+                else:
+                    chunk_data[user]['borrower_info'] = (0,)  # Dummy tuple
                 chunk_data[user]['ybs_balance'] = ybs.balanceOf(user)
                 if include_lp:
                     chunk_data[user]['lp_balance'] = lp_ycrv_v2.balanceOf(user)
+                if include_vanilla_ycrv:
+                    chunk_data[user]['vanilla_ycrv_balance'] = ycrv.balanceOf(user)
 
         # Calculate final values for this chunk
         for user in chunk:
@@ -123,31 +259,37 @@ def ycrv_positions():
             if include_lp:
                 value = chunk_data[user]['lp_balance'] * ycrv_per_share
             value += chunk_data[user]['st_balance'] * st_ycrv_price_per_share
-            value += chunk_data[user]['borrower_info'][0]  # collateral field
+            if include_ajna:
+                value += chunk_data[user]['borrower_info'][0]  # collateral field
             value += chunk_data[user]['ybs_balance']
+            if include_vanilla_ycrv:
+                value += chunk_data[user]['vanilla_ycrv_balance']
             values[user] = value
-    
+
     # Handle Firm (cached)
-    firm = Contract(YCRV['FIRM_MARKET'])
-    cached_firm_users, firm_logs = scan_events_with_cache(
-        firm, "CreateEscrow", YCRV['FIRM_MARKET_DEPLOY_BLOCK'], SNAPSHOT_HEIGHT, f"FIRM_MARKET@{YCRV['FIRM_MARKET_DEPLOY_BLOCK']}..{SNAPSHOT_HEIGHT}"
-    )
-    # Note: We don't use the users here, we process escrow mappings from logs directly
-    escrows_processed = 0
-    for log in firm_logs:
-        args = log.get('args') if hasattr(log, 'get') else getattr(log, 'args', None)
-        escrow = args.get('escrow') if args else None
-        user = args.get('user') if args else None
-        if not escrow or not user:
-            continue
-        value = values.get(escrow, 0)
-        if value == 0:
-            continue
-        if escrow in values:
-            del values[escrow]
-        values[user] = values.get(user, 0) + value
-        escrows_processed += 1
-    print(f"Processed {escrows_processed} Firm escrows")
+    if include_firm:
+        firm = Contract(YCRV['FIRM_MARKET'])
+        cached_firm_users, firm_logs = scan_events_with_cache(
+            firm, "CreateEscrow", YCRV['FIRM_MARKET_DEPLOY_BLOCK'], SNAPSHOT_HEIGHT, f"FIRM_MARKET@{YCRV['FIRM_MARKET_DEPLOY_BLOCK']}..{SNAPSHOT_HEIGHT}"
+        )
+        # Note: We don't use the users here, we process escrow mappings from logs directly
+        escrows_processed = 0
+        for log in firm_logs:
+            args = log.get('args') if hasattr(log, 'get') else getattr(log, 'args', None)
+            escrow = args.get('escrow') if args else None
+            user = args.get('user') if args else None
+            if not escrow or not user:
+                continue
+            value = values.get(escrow, 0)
+            if value == 0:
+                continue
+            if escrow in values:
+                del values[escrow]
+            values[user] = values.get(user, 0) + value
+            escrows_processed += 1
+        print(f"Processed {escrows_processed} Firm escrows")
+    else:
+        print("Skipping FIRM positions (include_firm=False)")
 
     if include_lp:
         # Handle Curve Gauge direct deposits (cached)
@@ -313,6 +455,7 @@ def ycrv_positions():
         YCRV['SD_LOCKER'],
         YCRV['YBS'],
         YCRV['YBS_STRATEGY'],
+        ZERO_ADDRESS,
     ]
     for item in REMOVAL_LIST:
         values.pop(item, None)
@@ -343,21 +486,48 @@ def ycrv_positions():
     values = {k: int(float(v)) for k, v in values.items()}                          # Convert to int
     values = {k: v for k, v in values.items() if v >= MIN_AMOUNT}                   # Remove anything less than min
 
-    # Discover contracts
+    # Discover contracts (identify addresses with bytecode that aren't EOF format)
     for user, val in list(values.items()):
-        if web3.eth.get_code(user).hex() != '0x':
-            print(user, val/1e18)
-            contracts.append(user)
+        data = web3.eth.get_code(user).hex()
+        if data == '0x' or data == '' or data.startswith(EOF_BYTECODE_PREFIX) or data.startswith(EOF_BYTECODE_PREFIX_NO_PREFIX):
+            continue
+        print(user, val/1e18)
+        contracts.append(user)
     print(f"Discovered {len(contracts)} contract addresses with balances")
 
     values = {k: v / 1e18 for k, v in values.items()}
     total = sum(values.values())
-    values = {
+
+    # Get block timestamp
+    block_timestamp = web3.eth.get_block(SNAPSHOT_HEIGHT)['timestamp']
+
+    # Get drop name and snapshot dir from config (already loaded at function start)
+    drop_name = config.get('drop_name', DropConfig.DROP_NAME)
+    snapshot_dir = config.get('snapshot_dir', DropConfig.SNAPSHOT_DIR)
+
+    # Build output with metadata
+    output = {
+        'metadata': {
+            'drop_name': drop_name,
+            'snapshot_height': SNAPSHOT_HEIGHT,
+            'block_timestamp': block_timestamp,
+            'include_lp': include_lp,
+            'include_untokenized': include_untokenized,
+            'include_firm': include_firm,
+            'include_ajna': include_ajna,
+            'include_vanilla_ycrv': include_vanilla_ycrv,
+            'min_amount_wei': str(MIN_AMOUNT),
+            'min_amount': MIN_AMOUNT / 1e18,  # Also store decimal for convenience
+            'generated_at': datetime.utcnow().isoformat() + 'Z',
+        },
         'total': total,
+        'num_recipients': len(values),
         'values': values,
     }
     print("TOTAL -->",total)
 
-    # write to json
-    with open(Config.YCRV_SNAPSHOT_FILE, 'w') as f:
-        dump(values, f, indent=2)
+    # Write to json with block-specific filename
+    os.makedirs(snapshot_dir, exist_ok=True)
+    output_file = DropConfig.get_snapshot_file(SNAPSHOT_HEIGHT)
+    with open(output_file, 'w') as f:
+        dump(output, f, indent=2)

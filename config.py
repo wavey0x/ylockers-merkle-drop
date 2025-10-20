@@ -23,13 +23,10 @@ class Config:
     SUPPLY_DATA_FILE = f'{CACHE_DIR}/supply_data.json'
     
     # Source data files
-    TEAM_SPLITS_FILE = f'{SOURCES_DIR}/team_splits.json'
-    VICTIM_DATA_FILE = f'{SOURCES_DIR}/victim_data.json'
-    PENALTY_DATA_FILE = f'{SOURCES_DIR}/penalty_data.json'
-    YCRV_SNAPSHOT_FILE = f'{SOURCES_DIR}/ycrv_snapshot.json'
+    YCRV_SNAPSHOT_FILE = f'{SOURCES_DIR}/yb/ycrv_snapshot.json'
 
     # Merkle output files
-    YB_DISTRO_FILE = f'{MERKLE_DIR}/yb_distro.json'
+    YB_DISTRO_FILE = f'{MERKLE_DIR}/yb.json'
 
     # Constants
     DUST_THRESHOLD = 1e3

@@ -1,0 +1,13 @@
+{
+  "drop_name": "yb",
+  "snapshot_dir": "data/sources/yb",
+  "merkle_output": "data/merkle/yb.json",
+  "total_tokens": "116459570000000000000000",
+  "block": 23582414,
+  "include_lp": false,
+  "include_untokenized": false,
+  "include_firm": false,
+  "include_ajna": false,
+  "min_amount": 2000.0,
+  "last_updated": "2025-10-20T13:41:40.178570"
+}
