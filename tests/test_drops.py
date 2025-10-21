@@ -23,7 +23,7 @@ def test_owner_access_control(drops, dai, gov, accounts, create_drop):
     merkle_root = "0x" + "00" * 32
 
     with reverts():
-        drops.createDrop(dai.address, 0, duration, amount, merkle_root, {"from": accounts[2]})
+        drops.createDrop('test description', dai.address, 0, duration, amount, merkle_root, {"from": accounts[2]})
 
     # Create a drop as owner (should succeed)
     drop_id, tx = create_drop()
@@ -95,7 +95,7 @@ def test_yb_claim_production_data(drops, yb_token, yb_merkle_data, dai_whale, go
     # Create drop with production merkle root
     duration = 86400 * 30
     drop_id = drops.dropCount()
-    drops.createDrop(yb_token.address, 0, duration, total_amount, merkle_root, {"from": gov})
+    drops.createDrop('test description', yb_token.address, 0, duration, total_amount, merkle_root, {"from": gov})
 
     # Pick first 3 addresses from claims to test
     test_accounts = list(yb_merkle_data['claims'].keys())[:3]
@@ -126,7 +126,7 @@ def test_yb_double_claim_protection(drops, yb_token, yb_merkle_data, dai_whale, 
     # Setup drop
     yb_token.transfer(drops.address, total_amount, {"from": dai_whale})
     drop_id = drops.dropCount()
-    drops.createDrop(yb_token.address, 0, 86400 * 30, total_amount, merkle_root, {"from": gov})
+    drops.createDrop('test description', yb_token.address, 0, 86400 * 30, total_amount, merkle_root, {"from": gov})
 
     # Get first claim data
     account = list(yb_merkle_data['claims'].keys())[0]
@@ -151,7 +151,7 @@ def test_yb_invalid_proof(drops, yb_token, yb_merkle_data, dai_whale, gov):
     # Setup drop
     yb_token.transfer(drops.address, total_amount, {"from": dai_whale})
     drop_id = drops.dropCount()
-    drops.createDrop(yb_token.address, 0, 86400 * 30, total_amount, merkle_root, {"from": gov})
+    drops.createDrop('test description', yb_token.address, 0, 86400 * 30, total_amount, merkle_root, {"from": gov})
 
     # Get real claim data but use wrong proof
     account = list(yb_merkle_data['claims'].keys())[0]
@@ -165,3 +165,15 @@ def test_yb_invalid_proof(drops, yb_token, yb_merkle_data, dai_whale, gov):
 
     with reverts("invalid proof"):
         drops.claim(drop_id, account, account, amount, wrong_proof, index, {"from": account})
+
+
+def test_set_drop_description(drops, gov, create_drop):
+    # Create drop
+    drop_id, tx = create_drop()
+    drop = drops.drops(drop_id)
+    assert drop['description'] == 'test description'
+
+    # Set description
+    drops.setDropDescription(drop_id, 'new description', {"from": gov})
+    drop = drops.drops(drop_id)
+    assert drop['description'] == 'new description'

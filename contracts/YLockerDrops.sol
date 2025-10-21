@@ -9,6 +9,8 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 contract YlockerDrops is Ownable {
     using SafeERC20 for IERC20;
 
+    uint256 public constant MAX_DESCRIPTION_BYTES = 384;
+
     uint256 public dropCount;
     mapping(address account => address delegate) public delegates;
     mapping(uint256 id => Drop drop) public drops;
@@ -21,13 +23,15 @@ contract YlockerDrops is Ownable {
         uint256 totalAmount;
         uint256 claimedAmount;
         bytes32 merkleRoot;
+        string description;
     }
 
     event DropCreated(uint256 indexed dropId, address indexed token, uint256 startsAt, uint256 expiresAt, uint256 totalAmount);
     event MerkleRootSet(uint256 indexed dropId, bytes32 merkleRoot);
     event Claimed(uint256 indexed dropId, address indexed account, address indexed recipient, uint256 amount);
-    event ExpiredTokensRecovered(address indexed token, uint256 amount);
+    event ExpiredTokensRecovered(uint256 indexed dropId, address indexed token, uint256 amount);
     event DelegateSet(address indexed account, address indexed delegate);
+    event DropDescriptionSet(uint256 indexed dropId, string description);
 
     constructor(address _owner) Ownable(_owner) {}
 
@@ -40,10 +44,11 @@ contract YlockerDrops is Ownable {
         uint256 _index
     ) external {
         require(msg.sender == _account || msg.sender == delegates[_account], "!authorized");
-        bytes32 _root = drops[_dropId].merkleRoot;
+        Drop storage drop = drops[_dropId];
+        bytes32 _root = drop.merkleRoot;
         require(_root != bytes32(0), "root not set");
-        require(drops[_dropId].startsAt <= block.timestamp, "!started");
-        require(drops[_dropId].expiresAt >= block.timestamp, "expired");
+        require(drop.startsAt <= block.timestamp, "!started");
+        require(drop.expiresAt >= block.timestamp, "expired");
         require(!hasClaimed[_account][_dropId], "already claimed");
         bytes32 node = keccak256(abi.encodePacked(_account, _index, _amount));
         require(MerkleProof.verifyCalldata(
@@ -52,9 +57,9 @@ contract YlockerDrops is Ownable {
             node
         ), "invalid proof");
         hasClaimed[_account][_dropId] = true;
-        drops[_dropId].claimedAmount += _amount;
+        drop.claimedAmount += _amount;
         emit Claimed(_dropId, _account, _recipient, _amount);
-        IERC20(drops[_dropId].token).safeTransfer(_recipient, _amount);
+        IERC20(drop.token).safeTransfer(_recipient, _amount);
     }
 
     /**
@@ -65,14 +70,15 @@ contract YlockerDrops is Ownable {
         @param _totalAmount Total amount of tokens to be distributed
         @param _merkleRoot Merkle root for the drop
     */
-    function createDrop(address _token, uint256 _startTime, uint256 _duration, uint256 _totalAmount, bytes32 _merkleRoot) external onlyOwner {
+    function createDrop(string calldata _description, address _token, uint256 _startTime, uint256 _duration, uint256 _totalAmount, bytes32 _merkleRoot) external onlyOwner {
+        require(bytes(_description).length <= MAX_DESCRIPTION_BYTES, "Description too long");
         if (_startTime == 0) _startTime = block.timestamp;
         require(_startTime >= block.timestamp);
         require(_totalAmount > 0, "totalAmount must be greater than 0");
         require(IERC20(_token).balanceOf(address(this)) >= _totalAmount, "not funded");
         require(_duration > 0, "duration must be greater than 0");
         uint256 _dropId = dropCount++;
-        drops[_dropId] = Drop(_token, uint40(_startTime), uint40(block.timestamp + _duration), _totalAmount, 0, _merkleRoot);
+        drops[_dropId] = Drop(_token, uint40(_startTime), uint40(block.timestamp + _duration), _totalAmount, 0, _merkleRoot, _description);
         emit DropCreated(_dropId, _token, uint40(_startTime), uint40(block.timestamp + _duration), _totalAmount);
         if (_merkleRoot != bytes32(0)) {
             emit MerkleRootSet(_dropId, _merkleRoot);
@@ -95,12 +101,23 @@ contract YlockerDrops is Ownable {
         require(drop.claimedAmount < drop.totalAmount, "fully claimed");
         uint256 _amount = drop.totalAmount - drop.claimedAmount;
         IERC20(drop.token).safeTransfer(owner(), _amount);
-        emit ExpiredTokensRecovered(drop.token, _amount);
+        emit ExpiredTokensRecovered(_dropId, drop.token, _amount);
     }
 
+    /**
+        @notice Set a delegate for an account, allowing them to claim on behalf of the account.
+        @dev Can only be called by the account itself or the owner.
+        @param _account Account to set the delegate for.
+        @param _delegate Delegate to set for the account
+    */
     function setDelegate(address _account, address _delegate) external {
-        if (msg.sender != _account) require(msg.sender == owner(), "not owner");
+        require(msg.sender == _account || msg.sender == owner(), "not authorized");
         delegates[_account] = _delegate;
         emit DelegateSet(_account, _delegate);
+    }
+
+    function setDropDescription(uint256 _dropId, string calldata _description) external onlyOwner {
+        drops[_dropId].description = _description;
+        emit DropDescriptionSet(_dropId, _description);
     }
 }

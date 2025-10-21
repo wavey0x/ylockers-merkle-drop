@@ -46,22 +46,14 @@ def create_drop(drops, dai, dai_whale, gov):
     Usage: drop_id, tx = create_drop()  # All defaults
            drop_id, tx = create_drop(amount=50_000 * 10**18)  # Custom
     """
-    def _create_drop(amount=None,
-                     token=None,
-                     duration=None,
-                     merkle_root=None,
-                     funder=None):
-        # Set defaults
-        if amount is None:
-            amount = 100_000 * 10**18
-        if token is None:
-            token = dai.address
-        if duration is None:
-            duration = 86400 * 7  # 7 days
-        if merkle_root is None:
-            merkle_root = "0x" + "00" * 32
-        if funder is None:
-            funder = dai_whale
+    def _create_drop(
+            amount=100_000 * 10**18,
+            token=dai.address,
+            duration=86400 * 7,
+            merkle_root="0x" + "00" * 32,
+            funder=dai_whale,
+            description='test description'
+        ):
 
         # Fund the contract
         token_contract = Contract(token) if isinstance(token, str) else token
@@ -69,7 +61,7 @@ def create_drop(drops, dai, dai_whale, gov):
 
         # Create the drop
         drop_id = drops.dropCount()
-        tx = drops.createDrop(token, 0, duration, amount, merkle_root, {"from": gov})
+        tx = drops.createDrop(description, token, 0, duration, amount, merkle_root, {"from": gov})
 
         return drop_id, tx
 
