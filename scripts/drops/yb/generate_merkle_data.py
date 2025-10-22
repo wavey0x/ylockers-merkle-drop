@@ -7,17 +7,22 @@ from eth_utils import encode_hex
 from eth_abi.packed import encode_packed
 from .snapshot import DropConfig
 
-def main():
+def main(output_path=None, description=''):
     """
     Entry point for brownie run.
 
     Generate merkle root for YB token distribution based on yCRV snapshot.
     Auto-detects the latest snapshot file or prompts for path.
+
+    Args:
+        output_path: Optional custom output path for the merkle data.
+                     If not provided, uses the default from config.json
+        description: Optional description/name for this drop
     """
     # Load configuration
     config = DropConfig.load_config()
     snapshot_dir = config.get('snapshot_dir', DropConfig.SNAPSHOT_DIR)
-    merkle_output = config.get('merkle_output', DropConfig.MERKLE_OUTPUT)
+    merkle_output = output_path if output_path else config.get('merkle_output', DropConfig.MERKLE_OUTPUT)
     total_tokens = int(config.get('total_tokens', DropConfig.TOTAL_TOKENS))
 
     # Auto-detect latest snapshot file
@@ -93,6 +98,7 @@ def main():
     tree = MerkleTree(nodes)
 
     distribution = {
+        "description": description,
         "merkle_root": encode_hex(tree.root),
         "token_total": str(final_total),
         "num_recipients": len(yb_amounts),

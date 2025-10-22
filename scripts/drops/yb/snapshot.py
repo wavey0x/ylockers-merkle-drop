@@ -25,7 +25,7 @@ class DropConfig:
     DEFAULT_MIN_AMOUNT = 500.0  # in tokens (not wei)
 
     # Output paths
-    SNAPSHOT_DIR = f'data/sources/{DROP_NAME}'
+    SNAPSHOT_DIR = f'data/snapshot/{DROP_NAME}'
     MERKLE_OUTPUT = f'data/merkle/{DROP_NAME}.json'
 
     # Distribution parameters (for merkle generation)
@@ -87,20 +87,18 @@ class DropConfig:
         """Get the snapshot file path for a given block height"""
         config = cls.load_config()
         snapshot_dir = config.get('snapshot_dir', cls.SNAPSHOT_DIR)
-        drop_name = config.get('drop_name', cls.DROP_NAME)
-        return f'{snapshot_dir}/{drop_name}_snapshot_{block_height}.json'
+        return f'{snapshot_dir}/snapshot_{block_height}.json'
 
     @classmethod
     def get_latest_snapshot(cls):
         """Find the most recent snapshot file"""
         config = cls.load_config()
         snapshot_dir = config.get('snapshot_dir', cls.SNAPSHOT_DIR)
-        drop_name = config.get('drop_name', cls.DROP_NAME)
 
         if not os.path.exists(snapshot_dir):
             return None
 
-        pattern = re.compile(rf'{drop_name}_snapshot_(\d+)\.json')
+        pattern = re.compile(r'snapshot_(\d+)\.json')
         snapshots = []
 
         for filename in os.listdir(snapshot_dir):

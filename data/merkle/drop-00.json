@@ -1,4 +1,5 @@
 {
+    "description": "YB Airdrop Distribution",
     "merkle_root": "0x9fa5d2466667b68e3bc77c182bf2aaeb1b38e85ba67a6d851ddbcd6277659ede",
     "token_total": "116459570000000000000000",
     "num_recipients": 418,

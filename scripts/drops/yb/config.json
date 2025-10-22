@@ -1,6 +1,6 @@
 {
   "drop_name": "yb",
-  "snapshot_dir": "data/sources/yb",
+  "snapshot_dir": "data/snapshot/yb",
   "merkle_output": "data/merkle/yb.json",
   "total_tokens": "116459570000000000000000",
   "block": 23582414,
