@@ -20,13 +20,31 @@ def create_drop():
     data = yb_merkle_data()
     merkle_root = data['merkle_root']
     amount = data['token_total']
-    duration = 86400 * 100
+    duration = 60 * 60 * 24 * 365
     description = data.get('description', 'YB Drop')  # Auto-pull description from merkle file
 
-    yb.transfer(drops.address, amount)
+    # yb.transfer(drops.address, amount)
     tx = drops.createDrop(description, yb, 0, duration, amount, merkle_root)
+    tx = drops.setMerkleRoot(0, '0x' + '00' * 32)
+    drops.setDropDescription(0, 'cancelled')
 
-    safe_tx = safe.multisend_from_receipts(safe_nonce=585)
+    safe_tx = safe.multisend_from_receipts()
+    safe.post_transaction(safe_tx)
+
+def claim_4a_drop():
+    yb = Contract('0x01791F726B4103694969820be083196cC7c045fF')
+    safe = BrownieSafe('0x4444AAAACDBa5580282365e25b16309Bd770ce4a')
+    drops = safe.contract('0xfF9eCd7e63c7d0a3b1401f86f65B15488C2C46c8')
+    drop_id = drops.dropCount() - 1
+    data = yb_merkle_data()
+    claim = data['claims'][safe.address]
+    index = claim['index']
+    amount = int(claim['amount'])
+    proof = claim['proof']
+    print(f"Claiming for {safe.address} with amount {amount/1e18:.2f} tokens and index {index} ....")
+    tx = drops.claim(drop_id, safe.address, safe.address, amount, proof, index, {"from": safe.address, 'allow_revert': True})
+    assert yb.balanceOf(safe.address) >= amount
+    safe_tx = safe.multisend_from_receipts()
     safe.post_transaction(safe_tx)
 
 def claim_drop():
