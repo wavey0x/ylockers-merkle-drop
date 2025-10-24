@@ -1,6 +1,7 @@
-from brownie import YlockerDrops, accounts, interface
+from brownie import YlockerDrops, accounts, interface, Contract
 from dotenv import load_dotenv
 import os
+from brownie_safe import BrownieSafe
 
 # Load environment variables from .env file
 load_dotenv()
@@ -13,18 +14,48 @@ def main():
     print(f"Drop deployed to {drops.address}")
 
 def create_drop():
-    drops = interface.IDrops('0xfF9eCd7e63c7d0a3b1401f86f65B15488C2C46c8')
-    yb = '0x01791F726B4103694969820be083196cC7c045fF'
-    four_a = '0x4444AAAACDBa5580282365e25b16309Bd770ce4a'
+    safe = BrownieSafe('0x4444AAAACDBa5580282365e25b16309Bd770ce4a')
+    drops = safe.contract('0xfF9eCd7e63c7d0a3b1401f86f65B15488C2C46c8')
+    yb = safe.contract('0x01791F726B4103694969820be083196cC7c045fF')
     data = yb_merkle_data()
     merkle_root = data['merkle_root']
     amount = data['token_total']
     duration = 86400 * 100
-    description = 'YB Drop'
+    description = data.get('description', 'YB Drop')  # Auto-pull description from merkle file
 
-    tx = drops.createDrop(description, yb, 0, duration, amount, merkle_root, {"from": four_a, 'allow_revert': True})
-    print(f"Drop created with ID {tx.return_value}")
-    return tx.return_value
+    yb.transfer(drops.address, amount)
+    tx = drops.createDrop(description, yb, 0, duration, amount, merkle_root)
+
+    safe_tx = safe.multisend_from_receipts(safe_nonce=585)
+    safe.post_transaction(safe_tx)
+
+def claim_drop():
+    drop_id = 0
+    drops = Contract('0xfF9eCd7e63c7d0a3b1401f86f65B15488C2C46c8')
+    data = yb_merkle_data()
+    claims = data['claims']
+    accounts_to_test = list(claims.items())[:3]
+    yb = Contract('0x01791F726B4103694969820be083196cC7c045fF')
+    for account, claim_info in accounts_to_test:
+        index = claim_info['index']
+        amount = int(claim_info['amount'])
+        proof = claim_info['proof']
+
+        print(f"\nClaiming for {account}:")
+        print(f"  Index: {index}")
+        print(f"  Amount: {amount / 1e18:.2f} tokens ({amount} wei)")
+
+        before_balance = yb.balanceOf(account)
+        tx = drops.claim(
+            drop_id,
+            account,
+            account,
+            amount,
+            proof,
+            index,
+            {"from": account, 'allow_revert': True}
+        )
+        assert yb.balanceOf(account) > before_balance
 
 def yb_merkle_data():
     """Load production YB distribution merkle data"""

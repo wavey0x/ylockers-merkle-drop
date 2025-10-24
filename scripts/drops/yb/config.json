@@ -9,6 +9,6 @@
   "include_firm": false,
   "include_ajna": false,
   "include_vanilla_ycrv": false,
-  "min_amount": 3000.0,
-  "last_updated": "2025-10-20T14:26:44.842727"
+  "min_amount": 10000.0,
+  "last_updated": "2025-10-24T08:14:52.197165"
 }

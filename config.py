@@ -15,7 +15,7 @@ class Config:
     # Directory structure
     DATA_DIR = 'data'
     MERKLE_DIR = f'{DATA_DIR}/merkle'
-    SOURCES_DIR = f'{DATA_DIR}/sources'
+    SOURCES_DIR = f'{DATA_DIR}/snapshot'
     CACHE_DIR = f'{DATA_DIR}/cache'
     
     # Cache data files
@@ -26,7 +26,7 @@ class Config:
     YCRV_SNAPSHOT_FILE = f'{SOURCES_DIR}/yb/ycrv_snapshot.json'
 
     # Merkle output files
-    YB_DISTRO_FILE = f'{MERKLE_DIR}/yb.json'
+    YB_DISTRO_FILE = f'{MERKLE_DIR}/drop-00.json'
 
     # Constants
     DUST_THRESHOLD = 1e3

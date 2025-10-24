@@ -50,6 +50,29 @@ def main(output_path=None, description=''):
     ycrv_amounts = snapshot_data['values']
     snapshot_total = snapshot_data['total']
 
+    # Sanity check: Ensure no duplicate addresses
+    addresses_lower = [addr.lower() for addr in ycrv_amounts.keys()]
+    unique_addresses = set(addresses_lower)
+
+    if len(addresses_lower) != len(unique_addresses):
+        click.echo(f"\n❌ ERROR: Duplicate addresses found in snapshot!")
+        click.echo(f"Total addresses: {len(addresses_lower)}")
+        click.echo(f"Unique addresses: {len(unique_addresses)}")
+
+        # Find and display duplicates
+        from collections import Counter
+        address_counts = Counter(addresses_lower)
+        duplicates = {addr: count for addr, count in address_counts.items() if count > 1}
+
+        click.echo(f"\nDuplicate addresses ({len(duplicates)}):")
+        for addr, count in duplicates.items():
+            click.echo(f"  {addr}: appears {count} times")
+
+        click.echo("\n⚠️  Cannot proceed with duplicate addresses in snapshot data!")
+        return
+
+    click.echo(f"✓ Sanity check passed: All {len(addresses_lower)} addresses are unique")
+
     # Display snapshot metadata if available
     if 'metadata' in snapshot_data:
         meta = snapshot_data['metadata']
